@@ -1,0 +1,19 @@
+# Base theme for Roro's archive. The real look comes from styles/streamlit.css;
+# these values only stop Streamlit flashing its defaults before the CSS lands.
+[theme]
+base = "dark"
+primaryColor = "#f1f1e8"
+backgroundColor = "#0a1a2e"
+secondaryBackgroundColor = "#0a1a2e"
+textColor = "#f1f1e8"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = false
+
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true

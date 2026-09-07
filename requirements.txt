@@ -1,0 +1,5 @@
+streamlit>=1.40,<2
+numpy>=1.26,<3
+openai>=1.50,<3
+anthropic>=0.60,<2
+python-dotenv>=1.0,<2

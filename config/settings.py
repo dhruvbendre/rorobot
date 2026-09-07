@@ -104,7 +104,7 @@ class Settings:
     max_context_chars: int = 9000
     history_turns: int = 6
     condense_followups: bool = True
-    max_answer_tokens: int = 900
+    max_answer_tokens: int = 160
 
     # --- storage ----------------------------------------------------------
     knowledge_dir: Path = field(default_factory=lambda: ROOT / "knowledge")
@@ -164,7 +164,7 @@ def load_settings(overrides: dict | None = None) -> Settings:
         max_context_chars=env_int("MAX_CONTEXT_CHARS", 9000),
         history_turns=env_int("HISTORY_TURNS", 6),
         condense_followups=env_bool("CONDENSE_FOLLOWUPS", True),
-        max_answer_tokens=env_int("MAX_ANSWER_TOKENS", 900),
+        max_answer_tokens=env_int("MAX_ANSWER_TOKENS", 160),
         knowledge_dir=knowledge_dir,
         index_dir=index_dir,
         include_test_data=env_bool("INCLUDE_TEST_DATA", False),

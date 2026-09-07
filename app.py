@@ -10,6 +10,9 @@ only wires the conversation to the interface.
 """
 from __future__ import annotations
 
+import time
+from collections.abc import Iterator
+
 import streamlit as st
 
 from config.settings import load_settings
@@ -75,8 +78,24 @@ def render_history() -> None:
             ui.render_answer(i, message["content"], message["sources"], mode=message["mode"])
 
 
+# Typing effect: a short pause while "Roro is typing", then the answer
+# appears a few characters at a time.
+TYPING_PAUSE = 0.9  # seconds before the first character
+TYPING_STEP = 3  # characters per tick
+TYPING_DELAY = 0.018  # seconds per tick
+
+
+def typewriter(source: str | Iterator[str]) -> Iterator[str]:
+    """Yield `source` (a string or a token stream) a few characters at a time."""
+    pieces = [source] if isinstance(source, str) else source
+    for piece in pieces:
+        for i in range(0, len(piece), TYPING_STEP):
+            yield piece[i : i + TYPING_STEP]
+            time.sleep(TYPING_DELAY)
+
+
 def answer(archive: Archive, question: str) -> None:
-    """Ask the archive and stream its answer into a fresh answer block."""
+    """Ask the archive and type its answer into a fresh answer block."""
     history = history_for_model()
     ui.render_user(question)
     remember("user", question)
@@ -84,20 +103,17 @@ def answer(archive: Archive, question: str) -> None:
     index = len(st.session_state["history"])
     slot = ui.thinking_placeholder()
     result: Answer = archive.ask(question, history)  # retrieval; a model call is only started for grounded answers
+    time.sleep(TYPING_PAUSE)
     slot.empty()
     mode = result.mode
     with ui.archive_container(index, mode=mode):
-        if result.stream is not None:
-            try:
-                text = st.write_stream(result.stream)
-                text = text if isinstance(text, str) else "".join(str(t) for t in text)
-            except ProviderError as exc:
-                # The model failed mid-answer (bad model name, rate limit, network).
-                text = str(exc)
-                mode = "error"
-                st.markdown(text)
-        else:
-            text = result.text
+        try:
+            typed = st.write_stream(typewriter(result.stream if result.stream is not None else result.text))
+            text = typed if isinstance(typed, str) else "".join(str(t) for t in typed)
+        except ProviderError as exc:
+            # The model failed mid-answer (bad model name, rate limit, network).
+            text = str(exc)
+            mode = "error"
             st.markdown(text)
         ui.render_sources(result.sources)
     remember("assistant", text, sources=result.sources, mode=mode)

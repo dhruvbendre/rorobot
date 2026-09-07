@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 import random
 from functools import lru_cache
+from pathlib import Path
 
 # Mnemora's palette (plot.md §4, art.md §2.4)
 BODY = "#1889c0"
@@ -168,20 +169,17 @@ def chalk_star(size: int = 14, cls: str = "") -> str:
     )
 
 
+ROOT = Path(__file__).resolve().parent
+_ASSETS = ROOT / "assets"
+
+
+@lru_cache(maxsize=1)
+def _roro_markup() -> str:
+    """The portfolio's own Roro (rendered by @bible-strong/avatar-react), saved as SVG."""
+    return (_ASSETS / "roro.svg").read_text(encoding="utf-8")
+
+
 def roro(size: int = 56, cls: str = "") -> str:
-    """
-    Roro, keeper of the archive: a round pink body with two tall navy eyes,
-    a blush on each cheek and two small feet. Drawn with the same slightly
-    wobbly crayon outline as the rest of the world.
-    """
-    return (
-        f'<svg class="{cls}" width="{size}" height="{size}" viewBox="0 0 64 64" aria-hidden="true">'
-        '<ellipse cx="22" cy="52" rx="9" ry="5.5" fill="#e04a8a"/><ellipse cx="42" cy="52" rx="9" ry="5.5" fill="#e04a8a"/>'
-        '<path d="M32 8 C 46 8 55 18 55 31 C 55 44 45 54 32 54 C 19 54 9 44 9 31 C 9 18 18 8 32 8 Z" fill="#f9a8d4"/>'
-        '<path d="M32 8 C 46 8 55 18 55 31 C 55 44 45 54 32 54 C 19 54 9 44 9 31 C 9 18 18 8 32 8 Z" fill="none" stroke="#f1f1e8" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="26 3 40 4 30 2" opacity="0.7"/>'
-        '<ellipse cx="25.5" cy="29" rx="3.2" ry="6.8" fill="#0a1a2e"/><ellipse cx="38.5" cy="29" rx="3.2" ry="6.8" fill="#0a1a2e"/>'
-        '<ellipse cx="25.5" cy="26.4" rx="1.3" ry="2.4" fill="#f1f1e8" opacity="0.9"/><ellipse cx="38.5" cy="26.4" rx="1.3" ry="2.4" fill="#f1f1e8" opacity="0.9"/>'
-        '<ellipse cx="17" cy="37" rx="3.6" ry="2" fill="#f472b6" opacity="0.75"/><ellipse cx="47" cy="37" rx="3.6" ry="2" fill="#f472b6" opacity="0.75"/>'
-        '<path d="M29.5 40.5 q2.5 2.2 5 0" fill="none" stroke="#0a1a2e" stroke-width="1.4" stroke-linecap="round"/>'
-        '</svg>'
-    )
+    """Roro, keeper of the archive: the same avatar the portfolio shows."""
+    svg = _roro_markup()
+    return svg.replace('class="bs-avatar__svg"', f'class="bs-avatar__svg {cls}" width="{size}" height="{size}"', 1)

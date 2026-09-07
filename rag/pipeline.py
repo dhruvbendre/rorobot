@@ -12,6 +12,8 @@ LLM_PROVIDER=none the grounded path returns the passages themselves.
 """
 from __future__ import annotations
 
+import re
+
 import random
 from dataclasses import dataclass, field
 from typing import Iterator
@@ -25,6 +27,7 @@ from .loader import Document, knowledge_fingerprint, load_documents
 from .prompts import (
     CONDENSE_PROMPT,
     EMPTY_ARCHIVE_NOTE,
+    NOT_ENOUGH,
     NOT_ENOUGH_VARIANTS,
     format_context,
     system_prompt,
@@ -197,11 +200,12 @@ class Archive:
                 text += "\n\n" + EMPTY_ARCHIVE_NOTE.format(owner_short=self.settings.owner_short)
             return Answer(question=question, grounded=False, text=text, mode="refusal", retrieval=retrieval)
 
-        hits = retrieval.strong_hits
+        hits = self._prefer_profile(query, retrieval.strong_hits)
         sources = _sources(hits)
 
         if not self.chat.generates:
-            return Answer(question=question, grounded=True, text=self._extractive(hits), sources=sources, mode="extractive", retrieval=retrieval)
+            text, used = self._extractive(hits)
+            return Answer(question=question, grounded=True, text=text, sources=_sources(used), mode="extractive", retrieval=retrieval)
 
         context = format_context(hits, max_chars=self.settings.max_context_chars)
         messages: list[Message] = [*self._recent(history), {"role": "user", "content": user_turn_with_context(question, context)}]
@@ -211,13 +215,72 @@ class Archive:
             return Answer(question=question, grounded=True, text=str(exc), sources=sources, mode="error", retrieval=retrieval)
         return Answer(question=question, grounded=True, stream=stream, sources=sources, mode="generated", retrieval=retrieval)
 
-    def _extractive(self, hits: list[Hit]) -> str:
-        """No model configured: return what the archive holds, verbatim and labelled."""
-        parts = ["Here is what the archive holds on that (no model is connected, so these are the passages themselves):"]
+    def _prefer_profile(self, query: str, hits: list[Hit]) -> list[Hit]:
+        """
+        An identity question ("who is he", "tell me about him", "what does he
+        do") opens with the Profile document's own introduction. The keyless
+        local embeddings rank Experience above it for such phrasings, which
+        made the first answer a list of internships instead of who he is.
+        """
+        if not hits or not IDENTITY_QUESTION.search(query) or self.store is None:
+            return hits
+        intro = next((c for c in self.store.chunks if c.category.lower() == "profile" and c.breadcrumb.lower() == "profile"), None)
+        if intro is None:
+            return hits
+        rest = [h for h in hits if h.chunk is not intro]
+        return [Hit(chunk=intro, score=max(h.score for h in hits)), *rest]
+
+    def _extractive(self, hits: list[Hit]) -> tuple[str, list[Hit]]:
+        """
+        No model configured: answer with the strongest passage, trimmed to a
+        couple of plain sentences so it reads like a reply, not a document.
+        """
         for hit in hits[:3]:
-            body = hit.chunk.text.split("\n\n", 1)[-1].strip()
-            parts.append(f"**{hit.chunk.source_label()}**\n\n{body}")
-        return "\n\n".join(parts)
+            text = _short_answer(hit.chunk.text)
+            if text:
+                return text, [hit]
+        return NOT_ENOUGH, []
+
+
+# "Who is he?", "tell me about him", "introduce him", "what does he do?"
+IDENTITY_QUESTION = re.compile(
+    r"^\s*(?:who\s+(?:is|are|was)\b|tell\s+me\s+about\b|introduce\b|describe\b|what\s+does\s+\S+(?:\s+\S+)?\s+do\b|about\s+\S+\s*$)",
+    re.IGNORECASE,
+)
+
+# Keep extractive answers this short (characters) and this many sentences.
+SHORT_ANSWER_CHARS = 280
+SHORT_ANSWER_SENTENCES = 2
+
+
+def _short_answer(chunk_text: str) -> str:
+    """Plain prose from a markdown chunk: no heading, no bullets, first sentences only."""
+    body = chunk_text.split("\n\n", 1)[-1]
+    lines: list[str] = []
+    for raw in body.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        line = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", line)  # bullets and numbers
+        line = re.sub(r"\*\*(.+?)\*\*", r"\1", line)  # bold
+        line = re.sub(r"\[(.+?)\]\((.+?)\)", r"\1", line)  # links
+        if line.endswith(":"):
+            line = line[:-1] + "."
+        elif line[-1] not in ".!?":
+            line += "."
+        lines.append(line)
+    prose = " ".join(lines)
+    sentences = re.split(r"(?<=[.!?])\s+", prose)
+    out = ""
+    for sentence in sentences[:SHORT_ANSWER_SENTENCES]:
+        candidate = f"{out} {sentence}".strip()
+        if out and len(candidate) > SHORT_ANSWER_CHARS:
+            break
+        out = candidate
+    if len(out) > SHORT_ANSWER_CHARS:
+        cut = out[:SHORT_ANSWER_CHARS].rsplit(" ", 1)[0]
+        out = cut.rstrip(",;:") + "…"
+    return out
 
 
 def _sources(hits: list[Hit]) -> list[Source]:

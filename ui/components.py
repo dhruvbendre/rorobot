@@ -154,7 +154,7 @@ def render_sources(sources: list[Source]) -> None:
 
 def thinking_placeholder():
     slot = st.empty()
-    slot.markdown(f'<span class="mn-thinking">{html.escape(BOT_NAME)} is remembering<i></i><i></i><i></i></span>', unsafe_allow_html=True)
+    slot.markdown(f'<span class="mn-thinking">{html.escape(BOT_NAME)} is typing<i></i><i></i><i></i></span>', unsafe_allow_html=True)
     return slot
 
 
